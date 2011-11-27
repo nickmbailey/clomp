@@ -6,10 +6,10 @@
 
 (deftest outstream
   (with-open [s   (java.net.Socket. "localhost" 61613)
-              out (clomp/outstream s {:destination "/queue/a"})]
+              out (writer (clomp/outstream s {:destination "/queue/a"}))]
     (clomp/with-connection s {:login "foo" :password "secret"}
       (clomp/subscribe s {:destination "/queue/a"})
-      (binding [*out* (writer out)]
+      (binding [*out* out]
         (print "cmb")
         (flush))
       (let [received (clomp/receive s)]
@@ -20,47 +20,50 @@
 (deftest outstream-eof
   (with-open [s (java.net.Socket. "localhost" 61613)]
     (clomp/with-connection s {:login "foo" :password "secret"}
-      (clomp/subscribe s {:destination "/queue/a"})
-      (binding [*out* (clomp/writer s {:destination "/queue/a"})]
-        (print "cmb")
-        (flush)
-        (.close *out*))
+      (with-open [out (clomp/writer s {:destination "/queue/a"})]
+        (clomp/subscribe s {:destination "/queue/a"})
+        (binding [*out* out]
+          (print "cmb")
+          (flush)))
       (is (= "cmb" (:body (clomp/receive s))))
       (is (get-in (clomp/receive s) [:headers :eof])))))
 
 (deftest instream
   (with-open [s  (java.net.Socket. "localhost" 61613)
-              in (clomp/instream s)]
+              in (reader (clomp/instream s))]
     (clomp/with-connection s {:login "foo" :password "secret"}
       (clomp/subscribe s {:destination "/queue/a"})
       (clomp/send s {:destination "/queue/a"} "hrm\n")
       (clomp/send s {:destination "/queue/a"} "jlb\n")
       (clomp/send s {:destination "/queue/a"} "cmb\n")
-      (binding [*in* (reader in)]
+      (binding [*in* in]
         (is (= "hrm" (read-line)))
         (is (= "jlb" (read-line)))
         (is (= "cmb" (read-line)))))))
 
 (deftest instream-eof
-  (with-open [s (java.net.Socket. "localhost" 61613)]
+  (with-open [s (java.net.Socket. "localhost" 61613)
+              in (clomp/reader s)]
     (clomp/with-connection s {:login "foo" :password "secret"}
       (clomp/subscribe s {:destination "/queue/a"})
       (clomp/send s {:destination "/queue/a"} "count to thirteen")
       (clomp/send s {:destination "/queue/a" :eof true} "")
-      (binding [*in* (clomp/reader s)]
+      (binding [*in* in]
         (is (= "count to thirteen" (read-line)))
         (is (= nil (read-line)))))))
 
 (deftest instream-outstream
-  (with-open [s (java.net.Socket. "localhost" 61613)]
+  (with-open [s (java.net.Socket. "localhost" 61613)
+              out (clomp/writer s {:destination "/queue/a"})
+              in (clomp/reader s)]
     (clomp/with-connection s {:login "foo" :password "secret"}
       (clomp/subscribe s {:destination "/queue/a"})
-      (binding [*out* (clomp/writer s {:destination "/queue/a"})]
+      (binding [*out* out]
         (println "foo")
         (println "bar")
         (println "baz")
-        (.close *out*))
-      (binding [*in* (clomp/reader s)]
+        (flush))
+      (binding [*in* in]
         (is (= "foo" (read-line)))
         (is (= "bar" (read-line)))
         (is (= "baz" (read-line)))))))

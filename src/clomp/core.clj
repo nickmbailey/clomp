@@ -1,11 +1,10 @@
 (ns clomp.core
   (:refer-clojure :exclude [send])
   (:use [clojure.string :only [join]])
-  (:require [clojure.java.io :as io])
-  (:import [java.net Socket]))
+  (:require [clojure.java.io :as io]))
 
-(def *session-id* nil)
-(def *connection* nil)
+(def ^{:dynamic true} *session-id* nil)
+(def ^{:dynamic true} *connection* nil)
 
 (defn- send-frame [out command headers & [body]]
   (binding [*out* (io/writer out)]
